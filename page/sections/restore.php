@@ -7,31 +7,48 @@ if(!defined('ABSPATH')) {
     header('HTTP/1.0 403 Forbidden');
     exit;
 }
-if( !cmc_migrate::is_user_allowed() ){
+if( !cmcmg::is_user_allowed() ){
 	echo 'You Do have sufficient Permission To View This Page'; 
 	return;
 }
 
-	if( empty( $_REQUEST['id'] ) ){
-		echo "<p>No Exported file Selected</p>";
-		return;
-	}
-	
-	$file = $_REQUEST['id']; $base = dirname($file); if( $base != '.' ) return;
-	$f_path = CMCMG_EXPORT_DIR . self::get_current_blog_id() .'/'.$file; 
-	$meta = file_get_contents('zip://'.$f_path.'#meta.json' );
-	$meta = json_decode( $meta, true ); 
-	
-	$bid = cmc_migrate::$url_blog_id;
-	$form_url = "?page=cmcmg&tab=restore&id=".esc_attr($_REQUEST['id']).$bid;
-	$form_url = apply_filters('cmcmg_admin_page_restore_url', $form_url);
+if( empty( $_REQUEST['id'] ) ){
+	echo "<p>No Exported file Selected</p>";
+	return;
+}
+
+$file = $_REQUEST['id']; $base = dirname($file); if( $base != '.' ) return;
+$f_path = CMCMG_EXPORT_DIR . cmcmg::get_current_blog_id() .'/'.$file; 
+$meta = file_get_contents('zip://'.$f_path.'#meta.json' );
+$meta = json_decode( $meta, true ); 
+
+$bid = cmcmg::$url_blog_id;
+$form_url = "?page=cmcmg&tab=restore&id=".esc_attr($_REQUEST['id']).$bid;
+$form_url = apply_filters('cmcmg_admin_page_restore_url', $form_url);
 ?>
 	
-<div id="cmcmg-admin-page-restore-container" >	
+<div id="cmcmg-admin-page-restore-container" >
+	<?php 
+		if( $_REQUEST['cmcmg_action'] == 'restore' ){
+			show_message( "<p>Restore Process Started</p>" );
+			$response = cmcmg_action::restore( array('echo_log'=> true) ); $param = is_array($response) ? $response['param']: array();
+			if( is_array($response) && !empty($response['message']) ){
+				show_message( $response['message']."\n" );
+			}
+			if( $param && $param['log_file'] ){
+				$log_file = str_replace( WP_CONTENT_DIR, content_url(), $param['log_file']);
+				show_message( "\n<a href='$log_file' target='_blank'>Log file</a>\n" );
+			}
+			show_message( "<p>Restore Process Completed. Thank you.</p>" );
+		}else{
+	?>
 	<form id="cmcmg-admin-page-restore-form" method="post" action="<?php echo $form_url; ?>" style="margin-top:10px;">				
-		
+		<style>
+			#cmcmg-admin-page-restore-replacetext table tbody tr:first-child button:nth-child(2){
+				display:none;
+			}
+		</style>
 		<?php do_action('cmcmg_admin_page_restore_before_accordion'); ?>	
-		
 		<div id="cmcmg-admin-page-restore-form-accordion">
 			<h3>Tables</h3>
 			<div id="cmcmg-admin-page-restore-db-tables" class="">
@@ -76,6 +93,38 @@ if( !cmc_migrate::is_user_allowed() ){
 					?>
 				</select>
 			</div>
+			<h3>Log File</h3>
+			<div id="cmcmg-admin-page-restore-logfile">	
+				<p><label>logfile: </label></p>			
+				<?php 
+					$log_file = @file_get_contents('zip://'.$f_path.'#log.txt');
+				?>
+				<textarea class="widefat" style="height:100%;" readonly="true"><?php echo $log_file; unset($log_file); ?></textarea>
+			</div>
+			<h3>Replace text</h3>
+			<div id="cmcmg-admin-page-restore-replacetext">
+				<table>	
+					<thead>
+						<tr>
+							<th>No.</th>
+							<th>Text</th>
+							<th>New text</th>
+							<th>Actions</th>
+						</tr>	
+					</thead>
+					<tbody>
+						<tr>
+							<td>1</td>
+							<td><input type="text" name="replacetext[0][text]" class="" /></td>
+							<td><input type="text" name="replacetext[0][replace]" class="" /></td>
+							<td>
+								<button type="button" onclick="cmcmg.replacetext(this, 'add');" >+</button>
+								<button type="button" onclick="cmcmg.replacetext(this, 'remove');" >X</button>								
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
 			
 			<?php do_action('cmcmg_admin_page_restore_accordion'); ?>	
 			
@@ -95,8 +144,20 @@ if( !cmc_migrate::is_user_allowed() ){
 						<td><?php echo $meta['blog_description'];  ?></td>
 					</tr>
 					<tr>
-						<th><label>Site Url:  </label></th>
+						<th><label>Admin Email:  </label></th>
 						<td><?php echo $meta['admin_email'];  ?></td>
+					</tr>
+					<tr>
+						<th><label>Site Url:  </label></th>
+						<td><?php echo $meta['siteurl'];  ?></td>
+					</tr>
+					<tr>
+						<th><label>Home Url:  </label></th>
+						<td><?php echo $meta['homeurl'];  ?></td>
+					</tr>
+					<tr>
+						<th><label>ABSPATH:  </label></th>
+						<td><?php echo $meta['ABSPATH'];  ?></td>
 					</tr>
 					<tr>
 						<th><label>Database Prefix: </label></th>
@@ -128,9 +189,7 @@ if( !cmc_migrate::is_user_allowed() ){
 				</p>
 			</div>	
 		</div>
-		
 		<?php do_action('cmcmg_admin_page_restore'); ?>		
-	
 	</form>
 	<script>
 		var cmcmg = cmcmg || {};
@@ -146,9 +205,35 @@ if( !cmc_migrate::is_user_allowed() ){
 				return false;
 			}
 			
+			cmcmg.replacetext = function( me, action ){
+				$me = $(me); $tr = $me.closest('tr'); $table = $me.closest('table');
+				if( action == 'add' ){
+					$trnew = $tr.clone(); 
+					$trnew.find(':text:nth-child(1)').val(''); 
+					$tr.find(':text:nth-child(2)').val('');
+					$trnew.insertAfter( $tr );
+				}else if( action == 'remove' ){
+					var index = $tr.index();
+					if( $tr.index() != 0 ){ $tr.remove(); }
+				}
+				
+				$table.find('tbody tr').each(function(i, v){
+					var $tr = $(this); var index = i+1;
+					$tr.find('td:nth-child(1)').text(index); $input = $tr.find(':text');
+					if( $input.size() > 0){
+						$($input[0]).prop('name', 'replacetext['+i+'][text]');
+						$($input[1]).prop('name', 'replacetext['+i+'][replace]');
+					}					
+				});
+			}			
+			
 			$(function(){
 				$('#cmcmg-admin-page-restore-form-accordion').accordion({collapsible: true, active: false});
 			});					
 		})(jQuery, cmcmg);
 	</script>
+	
+	<?php 
+		}
+	?>
 </div>

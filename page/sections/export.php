@@ -7,18 +7,18 @@ if(!defined('ABSPATH')) {
     header('HTTP/1.0 403 Forbidden');
     exit;
 }
-if( !cmc_migrate::is_user_allowed() ){
+if( !cmcmg::is_user_allowed() ){
 	echo 'You Do have sufficient Permission To View This Page'; 
 	return;
 }
 global $wpdb;
-$bid = cmc_migrate::$url_blog_id;
-$form_url = "?page=cmcmg".$bid;
+$bid = cmcmg::$url_blog_id;
+$form_url = "?page=cmcmg&tab=export".$bid;
 $form_url = apply_filters('cmcmg_admin_page_export_url', $form_url);
 
 //----------  Tables ---------------
-$pre = $wpdb->prefix; $b_id = cmc_migrate::get_blog_id();
-$tables = cmc_migrate::get_current_blog_tables();
+$pre = $wpdb->prefix; $b_id = cmcmg::get_blog_id();
+$tables = cmcmg::get_current_blog_tables();
 
 $sql = "SHOW VARIABLES LIKE 'basedir'"; $variables = $wpdb->get_results($sql, ARRAY_A);
 $mysql = $variables[0]['Value'];
@@ -37,10 +37,27 @@ if ( ! function_exists( 'wp_get_themes' ) ) {
 $themes = wp_get_themes( array( 'allowed' => true ) );
 $stylesheet = get_option( 'stylesheet' ); 					
 $theme = wp_get_theme(); $template = (empty($theme->template) && $theme->template != $stylesheet)? $theme->template:'';
+$table_size = cmcmg::database_size( $tables );
 //unset( $themes[$stylesheet] ); unset( $themes[$template] );
 ?>
 <div id="cmcmg-admin-page-export-container" >
+	<?php
+		if( $_REQUEST['cmcmg_action'] == 'export' ){
+			show_message( "<p>Export Process Started</p>" );
+			$response = cmcmg_action::export( array('echo_log'=> true) ); 
+			if( is_array($response) && !empty($response['message']) ){
+				show_message( $response['message']."\n" );
+			}
+			$param = is_array($response) ? $response['param']: array();
+			if( $param && $param['log_file'] ){
+				$log_file = str_replace( WP_CONTENT_DIR, content_url(), $param['log_file']);
+				//show_message( "\n<a href='$log_file' target='_blank'>Log file</a>\n" );
+			}
+			show_message( "<p>Export Process Completed. Thank you.</p>" );
+		}else{
+	?>
 	<form id="cmcmg-admin-page-export-form" method="post" action="<?php echo $form_url; ?>" style="margin-top:10px;">						
+		
 		<?php do_action('cmcmg_admin_page_export_before_accordion'); ?>
 		<div id="cmcmg-admin-page-export-form-accordion">
 			<h3>Tables <?php echo "(".count($tables).")";  ?></h3>
@@ -60,7 +77,8 @@ $theme = wp_get_theme(); $template = (empty($theme->template) && $theme->templat
 						}
 					}
 					?>
-				</select>
+				</select> 
+				<p><label>Table size: </label> <?php echo $table_size; ?></p>
 				<p><label>User Table: </label> <?php echo $wpdb->users; ?></p>
 				<p><label>User Meta Table: </label> <?php echo $wpdb->usermeta; ?></p>
 			</div>
@@ -72,9 +90,18 @@ $theme = wp_get_theme(); $template = (empty($theme->template) && $theme->templat
 				<?php if( is_multisite() ){ ?>
 				<p><label><strong>Network Activated Plugins: </strong></label> <?php echo implode( ', ', $network_plugins_actived ); ?></p>
 				<?php } ?>
-				<?php if( cmc_migrate::get_current_blog_id() > 0 ){ ?>
+				<?php if( cmcmg::get_current_blog_id() > 0 ){ ?>
 				<p><label><strong>Activated Plugins: </strong></label> <?php echo implode( ', ', $plugins_active ); ?></p>
 				<?php } ?>
+				<?php 
+					if( cmcmg::get_current_blog_id() == -1 ){
+						$net_plugins = cmcmg::get_network_blog_active_plugins();
+						$net_plugins = array_intersect_key( $plugins, array_flip($net_plugins) );
+						$net_plugins = array_column( $net_plugins, 'Name');
+				?>
+					<p><label><strong>All site Activated Plugins: </strong></label> <?php echo implode( ', ', $net_plugins ); ?></p>
+				<?php } ?>
+				
 				<p>Plus:</p>
 				<p class="cmcmg-input-selection"><small><span onclick="cmcmg.selectall( '#cmcmg-input-plugins', true);" >Select All</span> <span onclick="cmcmg.selectall( '#cmcmg-input-plugins', false);">Deselect All</span></small></p>
 				<select id="cmcmg-input-plugins" name="plugins[]" multiple="true" style="height:150px;">
@@ -93,10 +120,17 @@ $theme = wp_get_theme(); $template = (empty($theme->template) && $theme->templat
 			<div id="cmcmg-admin-page-export-themes">	
 				<?php ?>
 				<p><label><strong>Themes: </strong> </label><?php echo get_theme_root();  ?></p>
+				<?php if( cmcmg::get_current_blog_id() > 0 ){ ?>
 				<p><label><strong>Activated Themes: </strong></label> <?php echo $stylesheet  ?></p>
 				<?php if( !empty($template) ){ ?>
 						<p><label><strong>Activeted Theme Parent: </strong><?php echo $template; ?></label></p>
-				<?php } ?>				
+				<?php } 
+				}  
+					if( cmcmg::get_current_blog_id() == -1 ){
+						$net_themes = cmcmg::get_network_blog_active_themes();
+				?>
+					<p><label><strong>Activeted site Themes: </strong><?php echo implode( ', ', $net_themes ); ?></label></p>					
+				<?php } ?>
 				<p>Plus:</p>
 				<p class="cmcmg-input-selection"><small><span onclick="cmcmg.selectall( '#cmcmg-input-themes', true);" >Select All</span> <span onclick="cmcmg.selectall( '#cmcmg-input-themes', false);">Deselect All</span></small></p>
 				<select id="cmcmg-input-themes" name="themes[]" multiple="true" style="height:150px;">
@@ -126,7 +160,7 @@ $theme = wp_get_theme(); $template = (empty($theme->template) && $theme->templat
 					?>
 				</select>
 			</div>
-			
+				
 			<?php do_action('cmcmg_admin_page_export_accordion'); ?>
 			
 			<h3>Export</h3>
@@ -179,7 +213,7 @@ $theme = wp_get_theme(); $template = (empty($theme->template) && $theme->templat
 				
 				<?php wp_nonce_field( 'cmcmg-export-nonce','_wpnonce', true, true ); ?>
 				<p>
-					<button class="button button-primary" type="submit"name="cmcmg_action" value="export" >Create A Migration</button>
+					<button class="button button-primary" type="submit"name="cmcmg_action" value="export">Create A Migration</button>
 				</p>
 			</div>		
 		</div>
@@ -194,5 +228,8 @@ $theme = wp_get_theme(); $template = (empty($theme->template) && $theme->templat
 			
 		})(jQuery, cmcmg);
 	</script>
+	<?php 
+		}
+	?>
 </div>	
 	
