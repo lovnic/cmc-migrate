@@ -98,17 +98,18 @@ class cmc_migration_List extends WP_List_Table {
     }
     
     function column_filename( $item ) {
-        $nonce = wp_create_nonce( 'cmcmg_delete_action' ); $fname = $item[filename];
+        $nonce = wp_create_nonce( 'cmcmg_delete_action' ); $fname = $item['filename'];
         $title = "<strong>$fname</strong> ($item[filesize])";
 		$fname_url = urlencode( $fname );
 		$bid = cmcmg::$url_blog_id;
+		$debug = cmcmg::$dev_debug ? '&XDEBUG_SESSION_START' : '' ;
 		
         $actions = []; 
 		if( $_REQUEST['location'] == 'remote'){
-			$actions['import'] = "<a href='?page=cmcmg&cmcmg_action=remote_import$bid&XDEBUG_SESSION_START&id=$fname_url&_wpnonce=$nonce' >Import</a></span>";
+			$actions['import'] = "<a href='?page=cmcmg&cmcmg_action=remote_import$bid$debug&id=$fname_url&_wpnonce=$nonce' >Import</a></span>";
 		}else{
-			$actions['delete'] =  "<a onclick='return cmcmg.delete_export();' href='?page=cmcmg$bid&cmcmg_action=delete&XDEBUG_SESSION_START&id=$fname_url&_wpnonce=$nonce' style='color:red;' >Delete</a></span>";
-			$actions['download'] = "<a href='?page=cmcmg$bid&cmcmg_action=download&XDEBUG_SESSION_START&id=$fname_url&_wpnonce=$nonce' target='_blank' > Download</a>";
+			$actions['delete'] =  "<a onclick='return cmcmg.delete_export();' href='?page=cmcmg$bid&cmcmg_action=delete$debug&id=$fname_url&_wpnonce=$nonce' style='color:red;' >Delete</a></span>";
+			$actions['download'] = "<a href='?page=cmcmg$bid&cmcmg_action=download$debug&id=$fname_url&_wpnonce=$nonce' target='_blank' > Download</a>";
 			//$actions['restore'] = "<a onclick='return cmcmg.restore();' href='?page=cmcmg&cmcmg_action=restore&XDEBUG_SESSION_START&id=$fname_url&_wpnonce=$nonce' target='_blank' style='color:green;' > Restore</a></span>";
 			//$url = CMCMG_EXPORT_URL . cmcmg::get_current_blog_id().'/'.$fname_url;
 			//$actions['download'] = "<a href='$url' target='_blank' > Download</a>";
@@ -172,10 +173,11 @@ class cmc_migration_List extends WP_List_Table {
         $remote = $_REQUEST['location'] == 'remote'? 'current':'';
         $local = empty($_REQUEST['location'])? 'current':'';
 		$remote_url = $_REQUEST['location'] == 'remote'? ': '.cmcmg::get_setting('remote_migration_url'):'';
+		$debug = cmcmg::$dev_debug ? '&XDEBUG_SESSION_START' : '' ;
 		
         $views = array();
-		$views['local'] = "<a href='?page=cmcmg$bid&XDEBUG_SESSION_START' class='$local'>Local</a>";			
-		$views['remote'] = "<a href='?page=cmcmg$bid&location=remote&XDEBUG_SESSION_START' class='$remote'>Remote $remote_url</a>";
+		$views['local'] = "<a href='?page=cmcmg$bid$debug' class='$local'>Local</a>";			
+		$views['remote'] = "<a href='?page=cmcmg$bid&location=remote$debug' class='$remote'>Remote $remote_url</a>";
 
 		return $views;
     }
