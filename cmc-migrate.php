@@ -2,7 +2,7 @@
 /**
 Plugin Name: cmc-migrate
 Description: Migrate sites from installation to another
-Version: 0.0.3
+Version: 0.0.4
 Author: Evans Edem Ladzagla
 Author URI: https://profiles.wordpress.org/lovnic/
 License:     GPL3
@@ -109,7 +109,7 @@ final class cmc_migrate {
 				if( !empty( $_REQUEST['cmcmg_action'] ) ){					
 					switch( $_REQUEST['cmcmg_action'] ){
 						case 'import': cmcmg_action::import(); break;
-						case 'remote_import': cmcmg_action::remote_import(); break;			
+						//case 'remote_import': cmcmg_action::remote_import(); break;			
 						case 'download': cmcmg_action::download(); break;	
 						case 'delete': cmcmg_action::delete(); break;	
 						case 'save_settings': cmcmg_action::save_settings(); break;	
@@ -141,9 +141,9 @@ final class cmc_migrate {
 			if( defined( 'DOING_AJAX' ) && DOING_AJAX ){
 				if( $_REQUEST['cmcmg'] == 'migrations' ){
 					cmcmg_action::remote_migration_list();
-				}	
-				if( $_REQUEST['cmcmg'] == 'migration_file' ){
-					cmcmg_action::remote_import_migration_file();
+				}
+				if( $_REQUEST['cmcmg'] == 'migration_file1' ){
+					cmcmg_action::remote_import_migration_file();	
 				}
 			}
 		}

@@ -30,7 +30,7 @@ class cmcmg{
      *
      * @var bool
      */
-    public static $dev_debug = false;
+    public static $dev_debug = true;
 
 	
 	/**
