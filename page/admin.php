@@ -18,8 +18,15 @@ $menus = array(
     'migrations'=>array('text'=>__('Migrations', 'cmcmg'), 'href'=>"?page=cmcmg$bid", 
         'sections' => array(
             'migrations'=>array('page'=>function(){ 
-                echo "<div id='cmcmg_admin_page_section_migrations' class='cmcmg_section'>";
-				require("sections/migrations.php");
+                echo "<div id='cmcmg_admin_page_section_migrations' class='cmcmg_tab'>";
+                echo '<h3>'. __('All Migrations', 'cmcmg').'</h3>';
+                cmc_migrate::$migrations->prepare_items();
+				echo cmc_migrate::$migrations->show_messages();
+                cmc_migrate::$migrations->views();
+                echo "<form method='post' action='?page=cmcmg'>";
+                echo "<input type='hidden' name='XDEBUG_SESSION_START' />";                
+                cmc_migrate::$migrations->display();
+                echo "</form>";
                 echo "<div>";
             })
         ), 'default'=>'migrations'), 	
