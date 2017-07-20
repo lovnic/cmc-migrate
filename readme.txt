@@ -3,7 +3,7 @@ Contributors: lovnic
 Tags: migration, multisite, singlesite, export
 Requires at least: 4.6.0
 Tested up to: 4.8
-Stable tag: 0.0.2
+Stable tag: 0.0.3
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -45,4 +45,7 @@ fix bugs
 added actions 'cmcmg_init' and 'before_cmcmg_init'
 add support for multisite
 Supports wordpress 4.8
+
+= 0.0.3 - 2017-06-20 =
+fix bugs
 

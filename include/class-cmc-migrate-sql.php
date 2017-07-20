@@ -5,102 +5,46 @@ file: admin/migration_table.php
 since: 0.0.2 
 */
 
-class cmc_migrate_sql{
-
-	public static function run_dump_large_orig( $file, $logfile ){
-		// your config
-		$filename = 'yourGigaByteDump.sql';
-		$dbHost = 'localhost';
-		$dbUser = 'user';
-		$dbPass = '__pass__';
-		$dbName = 'dbname';
-		$maxRuntime = 8; // less then your max script execution limit
-
-
-		$deadline = time()+$maxRuntime; 
-		$progressFilename = $filename.'_filepointer'; // tmp file for progress
-		$errorFilename = $filename.'_error'; // tmp file for erro
-
-		mysql_connect($dbHost, $dbUser, $dbPass) OR die('connecting to host: '.$dbHost.' failed: '.mysql_error());
-		mysql_select_db($dbName) OR die('select db: '.$dbName.' failed: '.mysql_error());
-
-		($fp = fopen($filename, 'r')) OR die('failed to open file:'.$filename);
-
-		// check for previous error
-		if( file_exists($errorFilename) ){
-			die('<pre> previous error: '.file_get_contents($errorFilename));
-		}
-
-		// activate automatic reload in browser
-		echo '<html><head> <meta http-equiv="refresh" content="'.($maxRuntime+2).'"><pre>';
-
-		// go to previous file position
-		$filePosition = 0;
-		if( file_exists($progressFilename) ){
-			$filePosition = file_get_contents($progressFilename);
-			fseek($fp, $filePosition);
-		}
-
-		$queryCount = 0;
-		$query = '';
-		while( $deadline>time() AND ($line=fgets($fp, 1024000)) ){
-			if(substr($line,0,2)=='--' OR trim($line)=='' ){
-				continue;
-			}
-
-			$query .= $line;
-			if( substr(trim($query),-1)==';' ){
-				if( !mysql_query($query) ){
-					$error = 'Error performing query \'<strong>' . $query . '\': ' . mysql_error();
-					file_put_contents($errorFilename, $error."\n");
-					exit;
-				}
-				$query = '';
-				file_put_contents($progressFilename, ftell($fp)); // save the current file position for 
-				$queryCount++;
-			}
-		}
-
-		if( feof($fp) ){
-			echo 'dump successfully restored!';
-		}else{
-			echo ftell($fp).'/'.filesize($filename).' '.(round(ftell($fp)/filesize($filename), 2)*100).'%'."\n";
-			echo $queryCount.' queries processed! please reload or wait for automatic browser refresh!';
-		}
-	}
+class cmcmg_sql{
 
 	/*
-	* 	run sql dump file
+	* 	Run sql dump file
 	*
 	*	@param	$file 
 	*/
-	public static function run_dump_large( $file, $logfile ){
+	public static function run_dump_large( $file, $logfile, &$param = array() ){
 		global $wpdb; $fp = fopen($file, 'r');
 
-		$queryCount = 0; $query = '';
-		while( ($line = fgets($fp, 1024000)) ){
+		$queryCount = 0; $query = ''; 
+		//while( ($line = fgets($fp, 1024000)) ){
+		while( ($line = fgets($fp, $param['run_dump_large_size'])) ){
 			if(substr($line,0,2)=='--' OR trim($line)=='' ){
 				continue;
 			}
 			$query .= $line;
 			if( substr(trim($query),-1)==';' ){
+				if( is_array($param['replace_text_now']) || !empty(is_array($param['replace_text_now'])) ){
+					$query = self::replace_text( $query, $param['replace_text_now'], $param );
+				}
 				if( $wpdb->query($query) === false ){
-					if( !empty($logfile) ) cmc_migrate::log_write("Sql Error: ". $wpdb->last_error."\n Query: $query", $logfile);
-					exit;
+					if( !empty($logfile) ) cmcmg::log_write("Sql Error: ". $wpdb->last_error."\n Query: $query", $logfile, array('echo'=>$param['echo_log']) );
 				}
 				$query = ''; $queryCount++;
 			}
 		}
+		
+		if( !empty($logfile) ) cmcmg::log_write( "Queries executed: $queryCount queries" , $logfile, array('echo'=>$param['echo_log']));
+		fclose( $fp ); unset($param['replace_text_now']);
 	}
+	
 	/*
-	* 	run sql dump file
+	* 	Run sql dump file
 	*
 	*	@param	$file Sql file
 	*	@param	$logfile  Log file
 	*/
-	public static function run_dump( $file, $logfile ){	
-		global $wpdb; ini_set('memory_limit', '5120M'); set_time_limit ( 0 );
-		
+	public static function run_dump( $file, $logfile, &$param = array() ){	
+		global $wpdb; 		
 		$dump = file_get_contents($file);
 		$dump = (array)explode( ";\n", $dump ); ;
 		if( count( $dump ) == 1 ){
@@ -108,16 +52,35 @@ class cmc_migrate_sql{
 		}
 		$count = count( $dump );
 		
-		if( !empty($logfile) ) cmc_migrate::log_write( "Restoring Sql Dump file: $logfile" , $logfile);
-		if( !empty($logfile) ) cmc_migrate::log_write( "Queries detected: $count queries" , $logfile);
+		if( !empty($logfile) ) cmcmg::log_write( "Restoring Sql Dump file: $file" , $logfile, array('echo'=>$param['echo_log']));
+		if( !empty($logfile) ) cmcmg::log_write( "Queries detected: $count queries" , $logfile, array('echo'=>$param['echo_log']));
 		
 		while( count( $dump ) ){
 			$query = array_shift($dump);
+			if( is_array($param['replace_text_now']) || !empty(is_array($param['replace_text_now'])) ){
+				$query = self::replace_text( $query, $param['replace_text_now'], $param );
+			}			
 			$result = $wpdb->query($query);
 			if( $result === false){ //last_error;
-				if( !empty($logfile) ) cmc_migrate::log_write("Sql Error: ". $wpdb->last_error."\n Query: $query", $logfile);
+				if( !empty($logfile) ) cmcmg::log_write("Sql Error: ". $wpdb->last_error."\n Query: $query", $logfile, array('echo'=>$param['echo_log']) );
 			}	
 		}
+		unset($param['replace_text_now']);
+	}
+		
+	/*
+	* 	Replace text in dabase queries
+	*
+	*	@param	string	$query Sql query
+	*	@param	array	$replaces  array of keys old text and values for new text
+	*/
+	public static function replace_text( $query, $replaces, &$param = array() ){	
+		foreach($replaces as $repk => $repv){
+			if( strpos($query, $repk) !== false ){
+				$query = str_replace( $repk, $repv, $query );	
+			}			
+		}
+		return $query;
 	}
 		
 	/**
@@ -126,58 +89,72 @@ class cmc_migrate_sql{
 	 *	@param	array	$tables	Tables to be exported
 	 *	@param	string	$file	address of the file
      */
-	public static function phpsql_dump ( $tables, $file ){
-		global $wpdb; $dump; ini_set('memory_limit', '5120M'); set_time_limit ( 0 );
+	public static function phpsql_dump ( $tables, $file, &$param = array() ){
+		global $wpdb; $dump; 
         $dump = "/*\n*\tCMC MIGRATE MYSQL DUMP FILE MADE ON : " . @date("Y-m-d H:i:s");
 		$dump .= "\n*\tWordpress : " . get_bloginfo('version');
 		$dump .= "\n*\tPhp  : " . phpversion();	
 		$dump .= "\n*\tMysql  : " . $wpdb->db_version();
-		$dump .= "\n*\tCMC Migrate  : " . CMCMG_VERSION;		
+		$dump .= "\n*\tCMC Migrate  : " . CMCMG_VERSION;
+		$dump .= "\n*\tDatabase  : " . DB_NAME;		
 		$dump .= "\n*/\n";
 		$handle = fopen($file, 'w+');
         fwrite( $handle, $dump );
 
-        //BUILD INSERTS: 
         //Create Insert in 100 row increments to better handle memory
-        foreach ($tables as $table){
+        foreach ( $tables as $table ){
 			$create = $wpdb->get_row("SHOW CREATE TABLE `{$table}`", ARRAY_N);
            	$dump = "\n\n--\n-- Table structure for table $table\n--\n";
 			$dump .= 'DROP TABLE IF EXISTS '.$table.';';
 			$dump .= "\n" . $create[1] . ";\n\n";
-			@fwrite($handle, "$dump");	
-		
-			//$row_count = $wpdb->get_var("SELECT Count(*) FROM `{$table}`");
-
-			$query = "SELECT * FROM `{$table}` ";
-			$rows = $wpdb->get_results($query, ARRAY_A);
-			$row_count = count($rows); $row_id = 1;
-			if (is_array($rows) && $row_count > 0){				
-				$sql = "INSERT INTO `{$table}` VALUES "; 
-				foreach ($rows as $row){	
-					$sql .= "\n(";
-					$num_values = count($row); $num_counter = 1;
-					foreach ($row as $value){
-						if (is_null($value) || !isset($value)){
-							($num_values == $num_counter) ? $sql .= 'NULL' : $sql .= 'NULL, ';
-						}else{
-							($num_values == $num_counter) ? $sql .= '"' . @esc_sql($value) . '"' : $sql .= '"' . @esc_sql($value) . '", ';
-						}
-						$num_counter++;
-					}
-					$sql .= ")";
-					$sql .= ( $row_id  == $row_count )? ";\n":","; $row_id++;
-				}
-				fwrite($handle, $sql);
+			@fwrite($handle, "$dump");				
+			$row_count = $wpdb->get_var("SELECT Count(*) FROM `{$table}`");	
+			if( $row_count > 0 ){
+				$row_count = $row_count < $param['dump_limit']? 1 : ceil( $row_count / $param['dump_limit'] );
+			
+				for( $i = 0; $i < $row_count; $i++ ){	
+					$param['dump_limit_start'] = $i * $param['dump_limit'];
+					self::phpsql_write_table( $table, $handle, $param );
+				}	
 			}
-
-            $sql = null;
-            $rows = null;
         }
 
 		$dump = "/* CMC MIGRATE Timestamp: " . date("Y-m-d H:i:s") . "*/\n";
         fwrite($handle, $dump);
         $wpdb->flush();
         fclose($handle);
+	}
+	
+	/**
+     *  Manuall Create sql dump
+	 *
+	 *	@param	array	$tables	Tables to be exported
+	 *	@param	string	$file	address of the file
+     */
+	private static function phpsql_write_table( $table, $handle, &$param ){
+		global $wpdb; //$query = "SELECT * FROM `{$table}` ";		
+		$query = "SELECT * FROM `{$table}` LIMIT $param[dump_limit_start], $param[dump_limit]";
+		$rows = $wpdb->get_results($query, ARRAY_A);
+		$row_count = count($rows); $row_id = 1;
+		if(is_array($rows) && $row_count > 0){				
+			$sql = "INSERT INTO `{$table}` VALUES "; 
+			foreach ($rows as $row){	
+				$sql .= "\n(";
+				$num_values = count($row); $num_counter = 1;
+				foreach ($row as $value){
+					if (is_null($value) || !isset($value)){
+						($num_values == $num_counter) ? $sql .= 'NULL' : $sql .= 'NULL, ';
+					}else{
+						($num_values == $num_counter) ? $sql .= '"' . @esc_sql($value) . '"' : $sql .= '"' . @esc_sql($value) . '", ';
+					}
+					$num_counter++;
+				}
+				$sql .= ")";
+				$sql .= ( $row_id  == $row_count )? ";\n":","; $row_id++;
+			}
+			fwrite($handle, $sql);
+		}
+		$sql = null;   $rows = null;
 	}
 	
 	/**

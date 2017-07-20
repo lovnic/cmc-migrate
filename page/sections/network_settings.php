@@ -17,7 +17,7 @@ $model = get_site_option(CMCMG_NET_SETTINGS, $cmcmg_network_settings_default);
 if( !is_array( $model ) ){
 	$model = $cmcmg_network_settings_default;
 }
-$bid = cmc_migrate::$url_blog_id;
+$bid = cmcmg::$url_blog_id;
 ?>
 <div class="cmcmg_admin_page_section_network_settings_inner">
 	<style>
@@ -54,6 +54,10 @@ $bid = cmc_migrate::$url_blog_id;
 					<label>
 						 <?php echo __('Settings', 'cmcmg'); ?>
 						 <input name="del_opt_uninstall" type="checkbox" <?php checked( $model['del_opt_uninstall'], 1); ?> />
+					</label>
+					<label>
+						<?php echo __('CMC Migrate folder', 'cmcmg'); ?>
+						<input name="del_folder_uninstall" type="checkbox" <?php checked( $model['del_folder_uninstall'], 1); ?> />
 					</label>
                 </td>
             </tr>
