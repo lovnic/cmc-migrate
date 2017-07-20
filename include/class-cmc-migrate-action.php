@@ -77,6 +77,10 @@ class cmcmg_action{
 			echo $out['binary'];
 		}	
 		exit();
+		//if (!headers_sent()) {
+		//  foreach (headers_list() as $header)
+		//	header_remove($header);
+		//}
 	}
 	
 	/**
@@ -92,7 +96,7 @@ class cmcmg_action{
 		
 		$file = $_REQUEST['id'];
 		$out = (array)self::get_migration_file_binary( $file );
-		cmcmg::output_file( $out['binary'], $file, "application/zip", filesize($out['file']) );
+		cmcmg::output_file( $out['binary'], $file, filesize($out['file']) );
 	}
 		
 	/**
@@ -186,7 +190,7 @@ class cmcmg_action{
 	/**
      *  Import a migrated site remotely	
      */
-	public static function remote_import( $param ){
+	public static function remote_import(){
 		if ( isset( $_REQUEST['_wpnonce'] ) ) {
             $nonce = sanitize_text_field( wp_unslash( $_REQUEST['_wpnonce'] ) );                     
         }
@@ -195,20 +199,21 @@ class cmcmg_action{
         }
 		
 		$file = $_REQUEST['id'];  
-		$response = (array)self::_remote_import( $file, $param );
-		return $response;
-		//if( !empty( $response['message'] ) ){
-		//	$admin_notice = ( is_network_admin()? 'network_':'' ) . 'admin_notices';
-		//	add_action($admin_notice, function() use ( $response ){
-		//		$notice = $response['success']?'success':'error';
-		//		printf("<div class='notice notice-%s'><p>%s</p></div>", $notice, $response['message'] );
-		//	});
-		//}
+		$response = (array)self::_remote_import( $file );
 		
-		//$bid = cmcmg::$url_blog_id; $msg = '';
-		//$msg = cmcmg::url_message($response);		
-		//wp_redirect( "?page=cmcmg$bid$msg" );				
-		//exit;
+		if( !empty( $response['message'] ) ){
+			$admin_notice = ( is_network_admin()? 'network_':'' ) . 'admin_notices';
+			add_action($admin_notice, function() use ( $response ){
+				$notice = $response['success']?'success':'error';
+				printf("<div class='notice notice-%s'><p>%s</p></div>", $notice, $response['message'] );
+			});
+		}
+		
+		$bid = cmcmg::$url_blog_id; $msg = '';
+		$msg = cmcmg::url_message($response);
+		
+		wp_redirect( "?page=cmcmg$bid$msg" );				
+		exit;
 	}	
 	
 	/**
@@ -216,38 +221,33 @@ class cmcmg_action{
 	 *
 	 *	@param string $file	file name of migration to import			
      */
-	private static function _remote_import( $file, $param ){
+	private static function _remote_import( $file ){
 		if( empty($file) )return; $base = dirname($file); if( $base != '.' ) return;
 		ini_set('max_execution_time', 0);
 		$url = rtrim(cmcmg::get_setting('remote_migration_url'), '/\\'); $response = array();
-		$token = cmcmg::get_setting('remote_migration_token');		
-		$source = add_query_arg( array('XDEBUG_SESSION_START'=>'' ), $url.'/wp-admin/admin-ajax.php' );	
+		$token = cmcmg::get_setting('remote_migration_token');
 		
-		if($param['echo_log']) show_message("<p>Remote site url: <strong>$url</strong></p>");
-		if($param['echo_log']) show_message("<p>Importing file: <strong>$file</strong></p>");
+		$source = add_query_arg( array('XDEBUG_SESSION_START'=>'' ), $url.'/wp-admin/admin-ajax.php' );		
 		$resp = wp_remote_post( $source, array(
-			'method' => 'POST', 'timeout' => 120, 'redirection' => 5,
+			'method' => 'POST', 'timeout' => 45, 'redirection' => 5,
 			'httpversion' => '1.0', 'blocking' => true, 'headers' => array(),
 			'body' => array('cmcmg'=>'migration_file', 'token'=>$token, 'id'=>$file)
 			)  
-		); 		
+		); 
 		
 		if ( is_wp_error( $resp ) ) {
 			$response['success'] = false;
 			$response['message'] = $resp->get_error_message();
 		} else {
 			$export_dir = CMCMG_EXPORT_DIR . cmcmg::get_current_blog_id() .'/';
-			if( !file_exists( $export_dir ) )  mkdir( $export_dir, 0777, true );
-			if($param['echo_log']) show_message("<p>Saving file: <strong>$file</strong></p>");			
+			if( !file_exists( $export_dir ) )  mkdir( $export_dir, 0777, true );		
 			$destination = $export_dir . $file; $f = fopen($destination, "w+");
 			fputs($f, $resp['body']); fclose($f);
 			$response['success'] = true;
 			$response['message'] = "import successful";
 			$response['file'] = $destination;
-			unset( $resp['body'] );
 		}
 
-		if($param['echo_log']) show_message("<p>Appling additional functions</p>");
 		$response = apply_filters('cmcmg_remote_import', $response, $resp );	
 		return $response;
 	}

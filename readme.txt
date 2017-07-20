@@ -3,7 +3,7 @@ Contributors: lovnic
 Tags: migration, multisite, singlesite, export
 Requires at least: 4.6.0
 Tested up to: 4.8
-Stable tag: 0.0.4
+Stable tag: 0.0.3
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
