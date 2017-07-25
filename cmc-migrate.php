@@ -281,7 +281,7 @@ final class cmc_migrate {
      */
     protected static function constants(){
         global $wpdb;
-        define('CMCMG_VERSION', '0.0.3');
+        define('CMCMG_VERSION', '0.0.4');
         define('CMCMG_FOLDER', basename( dirname( __FILE__ ) ).'/' );
 		define('CMCMG_BASENAME', plugin_basename( __FILE__ ) );
         define('CMCMG_DIR', plugin_dir_path( __FILE__ ).'/' );
